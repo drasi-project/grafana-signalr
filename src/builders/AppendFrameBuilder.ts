@@ -2,138 +2,137 @@ import { DataFrame, FieldType, LoadingState, createDataFrame } from '@grafana/da
 import { DataFrameBuilder, ChangeEvent, BuilderResponse } from './DataFrameBuilder';
 
 /**
- * AppendFrameBuilder creates new DataFrames for each incoming change event
- * and appends them to the collection. This allows for viewing the history
- * of changes over time rather than just the current state.
+ * AppendFrameBuilder maintains a single DataFrame that appends all incoming
+ * data as new rows. Insert and Update operations add new rows to the dataset.
+ * Delete operations are ignored. This allows for viewing the complete history
+ * of all inserts and updates over time.
  */
 export class AppendFrameBuilder implements DataFrameBuilder {
-  private frames: DataFrame[] = [];
+  private dataset: Map<string, any> = new Map();
+  private currentFrame: DataFrame | null = null;
   private refId: string;
-  private frameCounter = 0;
+  private rowCounter = 0;
 
   constructor(queryId: string, refId?: string) {
     this.refId = refId || queryId;
   }
 
   processChange(event: ChangeEvent): BuilderResponse {
-    let newFrame: DataFrame | null = null;
+    let needsRebuild = false;
 
     switch (event.op) {
-      case 'i': // Insert
+      case 'i': // Insert - add new row
         if (event.payload?.after) {
-          newFrame = this.createFrameFromRow(event.payload.after, 'insert');
+          const rowData = event.payload.after;
+          const rowKey = this.generateRowKey();
+          this.dataset.set(rowKey, { ...rowData });
+          needsRebuild = true;
         }
         break;
 
-      case 'u': // Update
+      case 'u': // Update - treat as insert, add new row
         if (event.payload?.after) {
-          newFrame = this.createFrameFromRow(event.payload.after, 'update');
+          const rowData = event.payload.after;
+          const rowKey = this.generateRowKey();
+          this.dataset.set(rowKey, { ...rowData });
+          needsRebuild = true;
         }
         break;
 
-      case 'd': // Delete
-        if (event.payload?.before) {
-          newFrame = this.createFrameFromRow(event.payload.before, 'delete');
-        }
+      case 'd': // Delete - ignored
         break;
 
       case 'x': // Control Signal
-        // Control signals don't create new frames
         break;
 
       default:
         break;
     }
 
-    if (newFrame) {
-      this.frames.push(newFrame);
+    if (needsRebuild) {
+      this.rebuildFrame();
     }
 
     return {
-      frames: newFrame ? [newFrame] : [],
-      state: LoadingState.Streaming, // Use Streaming to append data
+      frames: this.currentFrame ? [this.currentFrame] : [],
+      state: LoadingState.Streaming,
     };
   }
 
   processReload(data: any[]): BuilderResponse {
-    // For reload, we can either:
-    // 1. Clear existing frames and add all reload data as new frames
-    // 2. Keep existing frames and add reload data
-    // Let's clear and create frames for each reload item
-    this.frames = [];
-    this.frameCounter = 0;
+    // Clear the existing dataset
+    this.dataset.clear();
+    this.rowCounter = 0;
 
-    const newFrames: DataFrame[] = [];
+    // Add each snapshot item to the dataset
     data.forEach((item) => {
-      const frame = this.createFrameFromRow(item, 'snapshot');
-      if (frame) {
-        this.frames.push(frame);
-        newFrames.push(frame);
-      }
+      const rowKey = this.generateRowKey();
+      this.dataset.set(rowKey, { ...item });
     });
 
+    // Rebuild the data frame from the new dataset
+    this.rebuildFrame();
+
     return {
-      frames: newFrames,
-      state: LoadingState.Done, // Use Done for initial snapshot load
+      frames: this.currentFrame ? [this.currentFrame] : [],
+      state: LoadingState.Streaming,
     };
   }
 
   getCurrentFrames(): DataFrame[] {
-    return [...this.frames];
+    return this.currentFrame ? [this.currentFrame] : [];
   }
 
   clear(): void {
-    this.frames = [];
-    this.frameCounter = 0;
+    this.dataset.clear();
+    this.currentFrame = null;
+    this.rowCounter = 0;
   }
 
-  private createFrameFromRow(rowData: any, operation: string): DataFrame | null {
-    if (!rowData || Object.keys(rowData).length === 0) {
-      return null;
+  private rebuildFrame(): void {
+    const rows = Array.from(this.dataset.values());
+
+    if (rows.length > 0) {
+      const firstRow = rows[0];
+
+      // Create fields based on the first row structure
+      const fields = Object.keys(firstRow).map(key => {
+        const value = firstRow[key];
+        let fieldType = FieldType.string;
+
+        if (typeof value === 'number') {
+          fieldType = FieldType.number;
+        } else if (typeof value === 'boolean') {
+          fieldType = FieldType.boolean;
+        } else if (value instanceof Date) {
+          fieldType = FieldType.time;
+        } else if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) {
+          fieldType = FieldType.time;
+        }
+
+        return {
+          name: key,
+          type: fieldType,
+          values: rows.map(row => row[key]),
+        };
+      });
+
+      this.currentFrame = createDataFrame({
+        fields,
+        refId: this.refId,
+        name: `Query ${this.refId}`
+      });
+    } else {
+      // Empty dataset - create frame with placeholder field
+      this.currentFrame = createDataFrame({
+        fields: [{ name: 'id', type: FieldType.string, values: [] }],
+        refId: this.refId,
+        name: `Query ${this.refId} (empty)`
+      });
     }
+  }
 
-    this.frameCounter++;
-
-    // Create fields based on the row structure
-    const fields = Object.keys(rowData).map(key => {
-      const value = rowData[key];
-      let fieldType = FieldType.string;
-
-      if (typeof value === 'number') {
-        fieldType = FieldType.number;
-      } else if (typeof value === 'boolean') {
-        fieldType = FieldType.boolean;
-      } else if (value instanceof Date) {
-        fieldType = FieldType.time;
-      } else if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) {
-        fieldType = FieldType.time;
-      }
-
-      return {
-        name: key,
-        type: fieldType,
-        values: [value], // Single value since this is one row
-      };
-    });
-
-    // Add operation type as a field to track what kind of change this was
-    fields.unshift({
-      name: '_operation',
-      type: FieldType.string,
-      values: [operation],
-    });
-
-    // Add timestamp field
-    fields.unshift({
-      name: '_timestamp',
-      type: FieldType.time,
-      values: [Date.now()],
-    });
-
-    return createDataFrame({
-      fields,
-      refId: this.refId,
-      name: `${this.refId}_${operation}_${this.frameCounter}`
-    });
+  private generateRowKey(): string {
+    return `row_${this.rowCounter++}`;
   }
 }

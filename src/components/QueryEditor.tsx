@@ -10,7 +10,7 @@ type Props = QueryEditorProps<any, DrasiQuery, DrasiDataSourceOptions>;
 
 const MODE_OPTIONS: Array<SelectableValue<DataFrameMode>> = [
   { label: 'Replace', value: 'replace', description: 'Replace dataframe with latest values (default)' },
-  { label: 'Append', value: 'append', description: 'Append new dataframes for each change' },
+  { label: 'Append', value: 'append', description: 'Append each change as new rows' },
 ];
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
@@ -113,14 +113,6 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           <p>
             This query will stream real-time changes from the SignalR endpoint for the specified query ID.
             Enable &quot;Load snapshot on start&quot; to get the current data state before streaming changes.
-          </p>
-          <p>
-            <strong>Replace mode:</strong> Maintains a single dataframe with the current state of all rows.
-            Updates modify the existing data.
-          </p>
-          <p>
-            <strong>Append mode:</strong> Creates new dataframes for each incoming change,
-            allowing you to see the history of changes over time.
           </p>
         </div>
       </div>
