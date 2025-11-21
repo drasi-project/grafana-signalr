@@ -100,8 +100,6 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
       if (sigRConn && sigRConn.connection) {
         // Listen for reconnected event
         sigRConn.connection.onreconnected(() => {
-          console.log(`SignalR reconnected for query ${queryId}, reloading snapshot...`);
-          
           // Reload data after reconnection to resync state
           this.performReload(queryId).catch(err => {
             console.error(`Failed to reload after reconnection for query ${queryId}:`, err);
@@ -118,7 +116,6 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
 
     // If builder exists but mode changed, recreate it
     if (existingEntry && existingEntry.mode !== mode) {
-      console.log(`Mode changed for ${refId} from ${existingEntry.mode} to ${mode}, recreating builder`);
       existingEntry.builder.clear();
       this.builders.delete(refId);
     }
@@ -151,7 +148,6 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
             
             // If there are no refIds, the query infrastructure hasn't been set up
             if (!refIds || refIds.size === 0) {
-              console.log(`Reload successful for query ${queryId} (no active queries to update)`);
               resolve();
               return;
             }
