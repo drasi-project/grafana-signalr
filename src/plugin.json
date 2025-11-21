@@ -36,7 +36,7 @@
   },
   "includes": [],
   "dependencies": {
-    "grafanaVersion": "8.0.0",
+    "grafanaVersion": "10.2.0",
     "plugins": []
   },
   "state": "alpha",

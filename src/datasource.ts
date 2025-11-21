@@ -1,12 +1,10 @@
 import {
   DataSourceInstanceSettings,
   DataFrame,
-  FieldType,
   LoadingState,
   DataQueryRequest,
   DataQueryResponse,
   DataSourceApi,
-  createDataFrame,
 } from '@grafana/data';
 import { Observable } from 'rxjs';
 import { ReactionListener } from '@drasi/signalr-react';
@@ -15,13 +13,14 @@ import {
   DrasiQuery,
   DrasiDataSourceOptions,
 } from './types';
+import { FrameBuilderFactory, type DataFrameBuilder } from './builders';
 
 export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions> {
   annotations = {};
   private signalrUrl: string;
-  private listeners: Map<string, ReactionListener> = new Map();
-  private dataFrames: Map<string, DataFrame> = new Map();
-  private datasets: Map<string, Map<string, any>> = new Map(); // queryId -> (rowKey -> rowData)
+  private listeners: Map<string, ReactionListener> = new Map(); // queryId -> ReactionListener
+  private builders: Map<string, { builder: DataFrameBuilder; mode: string }> = new Map(); // refId -> { builder, mode }
+  private queryIdToRefIds: Map<string, Set<string>> = new Map(); // queryId -> Set<refId>
 
   constructor(instanceSettings: DataSourceInstanceSettings<DrasiDataSourceOptions>) {
     super(instanceSettings);
@@ -56,238 +55,136 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
   private getOrCreateListener(queryId: string): ReactionListener {
     if (!this.listeners.has(queryId)) {
       const listener = new ReactionListener(this.signalrUrl, queryId, (event) => {
-        this.processChangeNotification(queryId, event);
-        
-        // Notify all observers for this query with complete refresh
-        const queryObservers = this.observers.get(queryId) || [];
-        const frame = this.getOrCreateDataFrame(queryId);
-        
-        // Send complete refresh - this replaces all previous data
-        queryObservers.forEach(observer => {
-          observer.next({
-            data: [frame],
-            state: LoadingState.Done, // Use Done instead of Streaming to replace data
-            key: queryId,
+        // A single queryId can be used by multiple refIds, so we need to process for each
+        const refIds = this.queryIdToRefIds.get(queryId);
+        if (!refIds || refIds.size === 0) {
+          console.error(`No refIds found for query ${queryId}`);
+          return;
+        }
+
+        // Process the change for each refId that uses this queryId
+        refIds.forEach(refId => {
+          const builderEntry = this.builders.get(refId);
+          if (!builderEntry) {
+            console.error(`No builder found for refId ${refId}`);
+            return;
+          }
+
+          // Process the change using the builder
+          const result = builderEntry.builder.processChange(event);
+
+          // Notify all observers for this refId
+          const refIdObservers = this.observers.get(refId) || [];
+          refIdObservers.forEach(observer => {
+            observer.next({
+              data: result.frames,
+              state: result.state,
+              key: refId,
+            });
           });
         });
       });
+      
+      // Set up reconnection handler
+      this.setupReconnectionHandler(listener, queryId);
+      
       this.listeners.set(queryId, listener);
     }
     return this.listeners.get(queryId)!;
   }
 
-  private getOrCreateDataset(queryId: string): Map<string, any> {
-    if (!this.datasets.has(queryId)) {
-      this.datasets.set(queryId, new Map());
-    }
-    return this.datasets.get(queryId)!;
-  }
-
-  private getOrCreateDataFrame(queryId: string): DataFrame {
-    if (!this.dataFrames.has(queryId)) {
-      this.createDataFrameFromDataset(queryId);
-    }
-    return this.dataFrames.get(queryId)!;
-  }
-
-  private createDataFrameFromDataset(queryId: string, refId?: string): void {
-    const dataset = this.getOrCreateDataset(queryId);
-    const rows = Array.from(dataset.values());
-    const frameRefId = refId || queryId;
-    
-    let frame: DataFrame;
-    
-    if (rows.length > 0) {
-      const firstRow = rows[0];
-      
-      // Create fields based on the first row structure
-      const fields = Object.keys(firstRow).map(key => {
-        const value = firstRow[key];
-        let fieldType = FieldType.string;
-        
-        if (typeof value === 'number') {
-          fieldType = FieldType.number;
-        } else if (typeof value === 'boolean') {
-          fieldType = FieldType.boolean;
-        } else if (value instanceof Date) {
-          fieldType = FieldType.time;
-        } else if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) {
-          fieldType = FieldType.time;
-        }
-        
-        return {
-          name: key,
-          type: fieldType,
-          values: rows.map(row => row[key]),
-        };
-      });
-      
-      frame = createDataFrame({ 
-        fields, 
-        refId: frameRefId,
-        name: `Query ${frameRefId}`
-      });
-    } else {
-      // Empty dataset - create frame with placeholder field
-      frame = createDataFrame({ 
-        fields: [{ name: 'id', type: FieldType.string, values: [] }],
-        refId: frameRefId,
-        name: `Query ${frameRefId} (empty)`
-      });
-    }
-    
-    this.dataFrames.set(queryId, frame);
-  }
-
-  private processChangeNotification(queryId: string, event: any): void {
-    const dataset = this.getOrCreateDataset(queryId);
-    let needsFrameRebuild = false;
-
-    // Handle Drasi change notifications
-    if (event.op) {
-      switch (event.op) {
-        case 'i': // Insert
-          if (event.payload?.after) {
-            const rowData = event.payload.after;
-            const rowKey = this.generateRowKey(rowData);
-            dataset.set(rowKey, { ...rowData });
-            needsFrameRebuild = true;
-          }
-          break;
-
-        case 'u': // Update
-          if (event.payload?.before && event.payload?.after) {
-            const beforeData = event.payload.before;
-            const afterData = event.payload.after;
-            
-            // Find and remove the old row
-            const oldRowKey = this.findRowByData(dataset, beforeData);
-            if (oldRowKey) {
-              dataset.delete(oldRowKey);
-            }
-            
-            // Add the new row
-            const newRowKey = this.generateRowKey(afterData);
-            dataset.set(newRowKey, { ...afterData });
-            needsFrameRebuild = true;
-          }
-          break;
-
-        case 'd': // Delete
-          if (event.payload?.before) {
-            const beforeData = event.payload.before;
-            const rowKey = this.findRowByData(dataset, beforeData);
-            if (rowKey) {
-              dataset.delete(rowKey);
-              needsFrameRebuild = true;
-            }
-          }
-          break;
-
-        case 'x': // Control Signal
-          // Control signals don't modify the dataset
-          break;
-
-        default:
-          break;
+  private setupReconnectionHandler(listener: ReactionListener, queryId: string): void {
+    try {
+      // Access the internal SignalR connection
+      const sigRConn = (listener as any).sigRConn;
+      if (sigRConn && sigRConn.connection) {
+        // Listen for reconnected event
+        sigRConn.connection.onreconnected(() => {
+          // Reload data after reconnection to resync state
+          this.performReload(queryId).catch(err => {
+            console.error(`Failed to reload after reconnection for query ${queryId}:`, err);
+          });
+        });
       }
-    }
-
-    // Rebuild the data frame if the dataset changed
-    if (needsFrameRebuild) {
-      this.rebuildDataFrame(queryId);
+    } catch (error) {
+      console.warn('Failed to setup reconnection handler:', error);
     }
   }
 
-  private generateRowKey(rowData: any): string {
-    // Create a hash from all fields for consistent identity
-    const sortedKeys = Object.keys(rowData).sort();
-    const keyString = sortedKeys.map(key => `${key}:${JSON.stringify(rowData[key])}`).join('|');
-    
-    // Simple hash function (djb2 algorithm)
-    let hash = 5381;
-    for (let i = 0; i < keyString.length; i++) {
-      hash = ((hash << 5) + hash) + keyString.charCodeAt(i);
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    
-    return Math.abs(hash).toString(36);
-  }
+  private getOrCreateBuilder(refId: string, queryId: string, mode: 'replace' | 'append'): DataFrameBuilder {
+    const existingEntry = this.builders.get(refId);
 
-  private findRowByData(dataset: Map<string, any>, targetData: any): string | null {
-    for (const [key, rowData] of dataset.entries()) {
-      if (this.objectsMatch(rowData, targetData)) {
-        return key;
-      }
+    // If builder exists but mode changed, recreate it
+    if (existingEntry && existingEntry.mode !== mode) {
+      existingEntry.builder.clear();
+      this.builders.delete(refId);
     }
-    return null;
-  }
 
-  private objectsMatch(obj1: any, obj2: any): boolean {
-    const keys2 = Object.keys(obj2);
-    
-    // Check if all keys in obj2 exist in obj1 and have matching values
-    for (const key of keys2) {
-      if (obj1[key] !== obj2[key]) {
-        return false;
-      }
+    // Create new builder if it doesn't exist
+    if (!this.builders.has(refId)) {
+      const builder = FrameBuilderFactory.createBuilder(mode, queryId, refId);
+      this.builders.set(refId, { builder, mode });
     }
-    
-    return true;
-  }
 
-  private rebuildDataFrame(queryId: string): void {
-    // Preserve the existing refId if we have one
-    const existingFrame = this.dataFrames.get(queryId);
-    const existingRefId = existingFrame?.refId;
-    
-    // Remove the old frame
-    this.dataFrames.delete(queryId);
-    
-    // Create a new frame from the current dataset with the same refId
-    this.createDataFrameFromDataset(queryId, existingRefId);
+    return this.builders.get(refId)!.builder;
   }
 
   private async performReload(queryId: string): Promise<void> {
     const listener = this.getOrCreateListener(queryId);
-    
+
     return new Promise((resolve, reject) => {
+      // Add timeout to prevent hanging on invalid query IDs
+      const timeout = setTimeout(() => {
+        reject(new Error(`Reload timeout - query ID "${queryId}" may not exist or is not responding`));
+      }, 10000); // 10 second timeout
+
       try {
         listener.reload((data: any[]) => {
           try {
-            // Clear the existing dataset
-            const dataset = this.getOrCreateDataset(queryId);
-            dataset.clear();
+            clearTimeout(timeout);
             
-            // Add each snapshot item to the dataset
-            data.forEach((item) => {
-              const rowKey = this.generateRowKey(item);
-              dataset.set(rowKey, { ...item });
-            });
+            // A single queryId can be used by multiple refIds, reload for all of them
+            const refIds = this.queryIdToRefIds.get(queryId);
             
-            // Rebuild the data frame from the new dataset
-            this.rebuildDataFrame(queryId);
-            
-            // Notify all observers for this query with the refreshed data
-            const queryObservers = this.observers.get(queryId) || [];
-            const frame = this.getOrCreateDataFrame(queryId);
-            
-            queryObservers.forEach(observer => {
-              observer.next({
-                data: [frame],
-                state: LoadingState.Done,
-                key: queryId,
+            // If there are no refIds, the query infrastructure hasn't been set up
+            if (!refIds || refIds.size === 0) {
+              resolve();
+              return;
+            }
+
+            // Process the reload for each refId that uses this queryId
+            refIds.forEach(refId => {
+              const builderEntry = this.builders.get(refId);
+              if (!builderEntry) {
+                console.error(`No builder found for refId ${refId}`);
+                return;
+              }
+
+              // Process the reload using the builder
+              const result = builderEntry.builder.processReload(data);
+
+              // Notify all observers for this refId with the refreshed data
+              // Observers may not exist if manually triggered from QueryEditor
+              const refIdObservers = this.observers.get(refId) || [];
+              refIdObservers.forEach(observer => {
+                observer.next({
+                  data: result.frames,
+                  state: result.state,
+                  key: refId,
+                });
               });
             });
-            
+
             resolve();
           } catch (processingError) {
+            clearTimeout(timeout);
             const errorMessage = processingError instanceof Error ? processingError.message : String(processingError);
             console.error('Error processing reload data:', processingError);
             reject(new Error(`Failed to process reload data: ${errorMessage}`));
           }
         });
       } catch (error) {
+        clearTimeout(timeout);
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error('Reload error:', error);
         reject(new Error(`Failed to initiate reload: ${errorMessage}`));
@@ -315,38 +212,52 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
       const setupQueries = async () => {
         try {
           const frames: DataFrame[] = [];
-          
+
           for (const target of activeQueries) {
             try {
-              // Register this observer for the query
-              if (!this.observers.has(target.queryId)) {
-                this.observers.set(target.queryId, []);
+              const refId = target.refId || target.queryId;
+
+              // Register this observer for the refId
+              if (!this.observers.has(refId)) {
+                this.observers.set(refId, []);
               }
-              this.observers.get(target.queryId)!.push(observer);
-              
+              this.observers.get(refId)!.push(observer);
+
+              // Register the queryId -> refId mapping
+              if (!this.queryIdToRefIds.has(target.queryId)) {
+                this.queryIdToRefIds.set(target.queryId, new Set());
+              }
+              this.queryIdToRefIds.get(target.queryId)!.add(refId);
+
+              // Create or get builder with the specified mode (mode change handled internally)
+              const builder = this.getOrCreateBuilder(
+                refId,
+                target.queryId,
+                target.mode || 'replace'
+              );
+
               // Get or create listener for this query
               this.getOrCreateListener(target.queryId);
-              
+
               // Perform initial snapshot if requested
               if (target.snapshotOnStart) {
                 await this.performReload(target.queryId);
               }
 
-              // Create frame with correct refId
-              this.createDataFrameFromDataset(target.queryId, target.refId || target.queryId);
-              const frame = this.getOrCreateDataFrame(target.queryId);
-              frames.push(frame);
-              
+              // Get current frames from the builder
+              const currentFrames = builder.getCurrentFrames();
+              frames.push(...currentFrames);
+
             } catch (queryError) {
               const errorMessage = queryError instanceof Error ? queryError.message : String(queryError);
               console.error(`Failed to setup query ${target.queryId}:`, queryError);
-              
+
               // Send error for this specific query
               observer.next({
                 data: [],
                 state: LoadingState.Error,
                 error: { message: `Failed to setup query "${target.queryId}": ${errorMessage}` },
-                key: target.queryId,
+                key: target.refId || target.queryId,
               });
               return; // Exit early on query setup failure
             }
@@ -356,7 +267,7 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
           observer.next({
             data: frames,
             state: LoadingState.Streaming,
-            key: activeQueries.map(t => t.queryId).join(','),
+            key: activeQueries.map(t => t.refId || t.queryId).join(','),
           });
 
         } catch (error) {
@@ -372,18 +283,34 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
       };
 
       setupQueries();
-      
+
       // Return cleanup function
       return () => {
         for (const target of activeQueries) {
-          const queryObservers = this.observers.get(target.queryId);
-          if (queryObservers) {
-            const index = queryObservers.indexOf(observer);
+          const refId = target.refId || target.queryId;
+
+          // Remove observer for this refId
+          const refIdObservers = this.observers.get(refId);
+          if (refIdObservers) {
+            const index = refIdObservers.indexOf(observer);
             if (index > -1) {
-              queryObservers.splice(index, 1);
+              refIdObservers.splice(index, 1);
             }
-            if (queryObservers.length === 0) {
-              this.observers.delete(target.queryId);
+            if (refIdObservers.length === 0) {
+              this.observers.delete(refId);
+              // Clean up builder for this refId
+              this.builders.delete(refId);
+
+              // Remove refId from queryId mapping
+              const refIds = this.queryIdToRefIds.get(target.queryId);
+              if (refIds) {
+                refIds.delete(refId);
+                if (refIds.size === 0) {
+                  this.queryIdToRefIds.delete(target.queryId);
+                  // If no more refIds use this queryId, clean up the listener
+                  this.listeners.delete(target.queryId);
+                }
+              }
             }
           }
         }
@@ -393,8 +320,34 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
 
   async testDatasource(): Promise<{ status: string; message: string }> {
     try {
-      // Create a test listener to verify basic configuration
-      new ReactionListener(this.signalrUrl, 'test', () => {});
+      // Validate URL is configured
+      if (!this.signalrUrl || this.signalrUrl.trim() === '') {
+        return {
+          status: 'error',
+          message: 'SignalR URL is required',
+        };
+      }
+
+      // Try to establish a connection to verify the endpoint exists
+      const testListener = new ReactionListener(this.signalrUrl, '__test__', () => {});
+      
+      // Wait for the connection to be established (or fail)
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection timeout - unable to reach SignalR endpoint'));
+        }, 5000);
+
+        // Access the internal connection promise
+        (testListener as any).sigRConn.started
+          .then(() => {
+            clearTimeout(timeout);
+            resolve();
+          })
+          .catch((err: Error) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+      });
       
       return {
         status: 'success',
@@ -410,15 +363,33 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
   }
 
   async dispose() {
-    // Clean up all listeners
+    // Clean up all listeners, builders, and mappings
     this.listeners.clear();
-    this.dataFrames.clear();
-    this.datasets.clear();
+    this.builders.clear();
     this.observers.clear();
+    this.queryIdToRefIds.clear();
   }
 
   // Public method to allow QueryEditor to trigger reload
-  async reloadSnapshot(queryId: string): Promise<void> {
+  async reloadSnapshot(queryId: string, refId?: string): Promise<void> {
+    // Ensure we have the infrastructure set up for this query
+    const effectiveRefId = refId || queryId;
+    
+    // If the query isn't already active, set it up
+    if (!this.queryIdToRefIds.has(queryId) || this.queryIdToRefIds.get(queryId)!.size === 0) {
+      // Register the queryId -> refId mapping
+      if (!this.queryIdToRefIds.has(queryId)) {
+        this.queryIdToRefIds.set(queryId, new Set());
+      }
+      this.queryIdToRefIds.get(queryId)!.add(effectiveRefId);
+      
+      // Create builder for this query
+      this.getOrCreateBuilder(effectiveRefId, queryId, 'replace');
+      
+      // Create listener
+      this.getOrCreateListener(queryId);
+    }
+    
     return this.performReload(queryId);
   }
 }

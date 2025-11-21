@@ -1,9 +1,12 @@
 import { DataQuery, DataSourceJsonData } from '@grafana/data';
 
+export type DataFrameMode = 'replace' | 'append';
+
 export interface DrasiQuery extends DataQuery {
   queryId: string;
   snapshotOnStart?: boolean;
   refId: string;
+  mode?: DataFrameMode; // How to handle incoming data: 'replace' (default) or 'append'
 }
 
 export interface DrasiDataSourceOptions extends DataSourceJsonData {

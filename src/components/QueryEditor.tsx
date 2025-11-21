@@ -1,12 +1,17 @@
 import React, { ChangeEvent, useState } from 'react';
-import { LegacyForms, Button, Alert } from '@grafana/ui';
-import { QueryEditorProps } from '@grafana/data';
+import { LegacyForms, Button, Alert, Select } from '@grafana/ui';
+import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { DataSource } from '../datasource';
-import { DrasiDataSourceOptions, DrasiQuery } from '../types';
+import { DrasiDataSourceOptions, DrasiQuery, DataFrameMode } from '../types';
 
 const { FormField, Switch } = LegacyForms;
 
 type Props = QueryEditorProps<any, DrasiQuery, DrasiDataSourceOptions>;
+
+const MODE_OPTIONS: Array<SelectableValue<DataFrameMode>> = [
+  { label: 'Replace', value: 'replace', description: 'Replace dataframe with latest values (default)' },
+  { label: 'Append', value: 'append', description: 'Append each change as new rows' },
+];
 
 export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) {
   const [error, setError] = useState<string | null>(null);
@@ -26,13 +31,18 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
     onRunQuery();
   };
 
+  const onModeChange = (option: SelectableValue<DataFrameMode>) => {
+    onChange({ ...query, mode: option.value || 'replace' });
+    onRunQuery();
+  };
+
   const onReloadSnapshot = async () => {
     if (query.queryId && datasource instanceof DataSource) {
       setIsReloading(true);
       setError(null);
       
       try {
-        await datasource.reloadSnapshot(query.queryId);
+        await datasource.reloadSnapshot(query.queryId, query.refId);
         // Trigger query execution to refresh the panel data
         onRunQuery();
       } catch (error) {
@@ -54,7 +64,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           </Alert>
         </div>
       )}
-      
+
       <div className="gf-form">
         <FormField
           label="Query ID"
@@ -66,7 +76,17 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
           tooltip="The query ID to monitor for changes"
         />
       </div>
-      
+
+      <div className="gf-form">
+        <label className="gf-form-label width-8">Data Mode</label>
+        <Select
+          options={MODE_OPTIONS}
+          value={MODE_OPTIONS.find(option => option.value === (query.mode || 'replace'))}
+          onChange={onModeChange}
+          width={20}
+        />
+      </div>
+
       <div className="gf-form">
         <Switch
           label="Load snapshot on start"
