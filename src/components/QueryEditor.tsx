@@ -42,7 +42,7 @@ export function QueryEditor({ query, onChange, onRunQuery, datasource }: Props) 
       setError(null);
       
       try {
-        await datasource.reloadSnapshot(query.queryId);
+        await datasource.reloadSnapshot(query.queryId, query.refId);
         // Trigger query execution to refresh the panel data
         onRunQuery();
       } catch (error) {

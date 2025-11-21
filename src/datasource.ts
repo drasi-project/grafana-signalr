@@ -84,9 +84,33 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
           });
         });
       });
+      
+      // Set up reconnection handler
+      this.setupReconnectionHandler(listener, queryId);
+      
       this.listeners.set(queryId, listener);
     }
     return this.listeners.get(queryId)!;
+  }
+
+  private setupReconnectionHandler(listener: ReactionListener, queryId: string): void {
+    try {
+      // Access the internal SignalR connection
+      const sigRConn = (listener as any).sigRConn;
+      if (sigRConn && sigRConn.connection) {
+        // Listen for reconnected event
+        sigRConn.connection.onreconnected(() => {
+          console.log(`SignalR reconnected for query ${queryId}, reloading snapshot...`);
+          
+          // Reload data after reconnection to resync state
+          this.performReload(queryId).catch(err => {
+            console.error(`Failed to reload after reconnection for query ${queryId}:`, err);
+          });
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to setup reconnection handler:', error);
+    }
   }
 
   private getOrCreateBuilder(refId: string, queryId: string, mode: 'replace' | 'append'): DataFrameBuilder {
@@ -124,8 +148,12 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
             
             // A single queryId can be used by multiple refIds, reload for all of them
             const refIds = this.queryIdToRefIds.get(queryId);
+            
+            // If there are no refIds, the query infrastructure hasn't been set up
             if (!refIds || refIds.size === 0) {
-              throw new Error(`No refIds found for query ${queryId}`);
+              console.log(`Reload successful for query ${queryId} (no active queries to update)`);
+              resolve();
+              return;
             }
 
             // Process the reload for each refId that uses this queryId
@@ -140,6 +168,7 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
               const result = builderEntry.builder.processReload(data);
 
               // Notify all observers for this refId with the refreshed data
+              // Observers may not exist if manually triggered from QueryEditor
               const refIdObservers = this.observers.get(refId) || [];
               refIdObservers.forEach(observer => {
                 observer.next({
@@ -346,7 +375,25 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
   }
 
   // Public method to allow QueryEditor to trigger reload
-  async reloadSnapshot(queryId: string): Promise<void> {
+  async reloadSnapshot(queryId: string, refId?: string): Promise<void> {
+    // Ensure we have the infrastructure set up for this query
+    const effectiveRefId = refId || queryId;
+    
+    // If the query isn't already active, set it up
+    if (!this.queryIdToRefIds.has(queryId) || this.queryIdToRefIds.get(queryId)!.size === 0) {
+      // Register the queryId -> refId mapping
+      if (!this.queryIdToRefIds.has(queryId)) {
+        this.queryIdToRefIds.set(queryId, new Set());
+      }
+      this.queryIdToRefIds.get(queryId)!.add(effectiveRefId);
+      
+      // Create builder for this query
+      this.getOrCreateBuilder(effectiveRefId, queryId, 'replace');
+      
+      // Create listener
+      this.getOrCreateListener(queryId);
+    }
+    
     return this.performReload(queryId);
   }
 }
