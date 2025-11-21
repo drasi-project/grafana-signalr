@@ -112,9 +112,16 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
     const listener = this.getOrCreateListener(queryId);
 
     return new Promise((resolve, reject) => {
+      // Add timeout to prevent hanging on invalid query IDs
+      const timeout = setTimeout(() => {
+        reject(new Error(`Reload timeout - query ID "${queryId}" may not exist or is not responding`));
+      }, 10000); // 10 second timeout
+
       try {
         listener.reload((data: any[]) => {
           try {
+            clearTimeout(timeout);
+            
             // A single queryId can be used by multiple refIds, reload for all of them
             const refIds = this.queryIdToRefIds.get(queryId);
             if (!refIds || refIds.size === 0) {
@@ -145,12 +152,14 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
 
             resolve();
           } catch (processingError) {
+            clearTimeout(timeout);
             const errorMessage = processingError instanceof Error ? processingError.message : String(processingError);
             console.error('Error processing reload data:', processingError);
             reject(new Error(`Failed to process reload data: ${errorMessage}`));
           }
         });
       } catch (error) {
+        clearTimeout(timeout);
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.error('Reload error:', error);
         reject(new Error(`Failed to initiate reload: ${errorMessage}`));
@@ -286,8 +295,34 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
 
   async testDatasource(): Promise<{ status: string; message: string }> {
     try {
-      // Create a test listener to verify basic configuration
-      new ReactionListener(this.signalrUrl, 'test', () => {});
+      // Validate URL is configured
+      if (!this.signalrUrl || this.signalrUrl.trim() === '') {
+        return {
+          status: 'error',
+          message: 'SignalR URL is required',
+        };
+      }
+
+      // Try to establish a connection to verify the endpoint exists
+      const testListener = new ReactionListener(this.signalrUrl, '__test__', () => {});
+      
+      // Wait for the connection to be established (or fail)
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Connection timeout - unable to reach SignalR endpoint'));
+        }, 5000);
+
+        // Access the internal connection promise
+        (testListener as any).sigRConn.started
+          .then(() => {
+            clearTimeout(timeout);
+            resolve();
+          })
+          .catch((err: Error) => {
+            clearTimeout(timeout);
+            reject(err);
+          });
+      });
       
       return {
         status: 'success',
