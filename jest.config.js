@@ -9,10 +9,14 @@ module.exports = {
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
     '!src/**/index.ts',
+    '!src/**/*.test.ts',
   ],
   coverageDirectory: 'coverage',
   setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    '^@grafana/data$': '<rootDir>/src/__mocks__/@grafana/data.ts',
+    '^@grafana/ui$': '<rootDir>/src/__mocks__/@grafana/ui.ts',
+    '^@grafana/runtime$': '<rootDir>/src/__mocks__/@grafana/runtime.ts',
   },
 };
