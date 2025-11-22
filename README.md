@@ -86,56 +86,6 @@ This will:
 
 You can add multiple queries to a single panel to combine different data streams.
 
-## 🔧 Development
-
-### Prerequisites
-
-- Node.js 18.x or later
-- npm or yarn
-- Docker (for testing environment)
-
-### Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Start development mode (with hot reload)
-npm run dev
-
-# Run tests
-npm test
-
-# Run type checking
-npm run typecheck
-
-# Lint code
-npm run lint
-```
-
-### Testing
-
-```bash
-# Unit tests
-npm run test:ci
-
-# End-to-end tests
-npm run e2e
-
-# Start test environment
-docker-compose up --build
-```
-
-### Building
-
-```bash
-# Production build
-npm run build
-
-# Sign plugin (requires GRAFANA_ACCESS_POLICY_TOKEN)
-npm run sign
-```
-
 ## 🏗️ Architecture
 
 ### Data Flow
@@ -143,6 +93,7 @@ npm run sign
 ```
 Drasi Platform → SignalR Endpoint → Plugin → Grafana Panel
 ```
+
 
 ### Operation Types
 
@@ -176,47 +127,13 @@ The plugin includes comprehensive error handling:
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-### Code Style
-
-- Use TypeScript
-- Follow existing code patterns
-- Add tests for new features
-- Update documentation
-
-## 📊 Plugin Validation
-
-This plugin is validated using the official Grafana plugin validator:
-
-```bash
-npx @grafana/plugin-validator@latest dist/
-```
-
-## 🔐 Security
-
-- All connections use secure WebSocket protocols when possible
-- No sensitive data is stored in browser localStorage
-- Error messages don't expose sensitive system information
+We welcome contributions! Please see our [Contributing Guide](https://github.com/drasi-project/grafana-signalr/blob/master/CONTRIBUTING.md) for details.
 
 ## 📋 Requirements
 
 ### Runtime Requirements
-- Grafana 8.0.0+
+- Grafana 10.2.0+
 - Modern web browser with WebSocket support
-
-### Development Requirements
-- Node.js 18.x or later
-- npm 8.x or later
-- Docker (for testing environment)
 
 ## 🐛 Troubleshooting
 
@@ -237,37 +154,18 @@ npx @grafana/plugin-validator@latest dist/
 - Verify plugin is properly signed (for production)
 - Ensure Grafana version compatibility
 
-### Debug Mode
-
-Enable debug logging by setting:
-```bash
-DEBUG=* npm run dev
-```
-
 ### Getting Help
 
 1. Check the [Issues](https://github.com/drasi-project/grafana-signalr/issues) page
-2. Review [Drasi Documentation](https://drasi.io/docs)
+2. Review [Drasi Documentation](https://drasi.io)
 3. Join our [Community Discord](https://discord.gg/drasi)
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License - see the [LICENSE](https://github.com/drasi-project/grafana-signalr/blob/master/LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
 - [Grafana](https://grafana.com/) for the excellent plugin framework
 - [Drasi Project](https://drasi.io/) for the reactive data platform
 - [SignalR](https://dotnet.microsoft.com/en-us/apps/aspnet/signalr) for real-time communication
-
-## 📈 Roadmap
-
-- [ ] Support for custom authentication methods
-- [ ] Advanced filtering capabilities
-- [ ] Performance optimizations for high-volume streams
-- [ ] Additional visualization options
-- [ ] Integration with Grafana alerting
-
----
-
-Made with ❤️ by the [Drasi Team](https://drasi.io/)

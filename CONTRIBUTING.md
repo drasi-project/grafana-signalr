@@ -16,31 +16,67 @@ Thank you for your interest in contributing! This document provides guidelines a
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/grafana-plugin.git
-   cd grafana-plugin
+   git clone https://github.com/<GitHub username>/grafana-signalr.git
+   cd grafana-signalr
    ```
 
 3. Add the upstream repository:
    ```bash
-   git remote add upstream https://github.com/drasi-project/grafana-plugin.git
+   git remote add upstream https://github.com/drasi-project/grafana-signalr.git
    ```
 
 ### Development Setup
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
+## 🔧 Development
 
-2. Start development server:
-   ```bash
-   npm run dev
-   ```
+### Prerequisites
 
-3. Start test environment:
-   ```bash
-   docker-compose up --build
-   ```
+- Node.js 18.x or later
+- npm or yarn
+- Docker (for testing environment)
+
+### Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Start development mode (with hot reload)
+npm run dev
+
+# Run tests
+npm test
+
+# Run type checking
+npm run typecheck
+
+# Lint code
+npm run lint
+```
+
+### Testing
+
+```bash
+# Unit tests
+npm run test:ci
+
+# End-to-end tests
+npm run e2e
+
+# Start test environment
+docker-compose up --build
+```
+
+### Building
+
+```bash
+# Production build
+npm run build
+
+# Sign plugin (requires GRAFANA_ACCESS_POLICY_TOKEN)
+npm run sign
+```
+
 
 ## 📝 Making Changes
 

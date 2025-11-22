@@ -113,6 +113,8 @@ const config = (env) => {
         patterns: [
           { from: 'plugin.json', to: '.' },
           { from: '../README.md', to: '.' },
+          { from: '../CHANGELOG.md', to: '.' },
+          { from: '../LICENSE', to: '.' },
           { from: 'img/**/*', to: '.', noErrorOnMissing: true },
           // { from: '../MANIFEST.txt', to: '.' }, // Removed to avoid signature issues
         ],
