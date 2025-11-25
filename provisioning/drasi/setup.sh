@@ -7,7 +7,7 @@ if [ ! -f "/data/drasi-cluster-created.flag" ]; then
     touch "/data/drasi-cluster-created.flag"
 fi
 
-while ( ! kubectl cluster-info ); do
+while ! kubectl cluster-info; do
   echo "Waiting for cluster to be ready..."
   sleep 2
 done
@@ -25,4 +25,7 @@ if [ ! -f "/data/drasi-init.flag" ]; then
     touch "/data/drasi-init.flag"
 fi
 
-./update-data.sh & kubectl port-forward --address 0.0.0.0 services/hello-world-signalr-reaction-gateway 8080:8080 -n drasi-system
+kubectl port-forward svc/postgres 5432:5432 &
+/update-data.sh & 
+kubectl port-forward --address 0.0.0.0 services/hello-world-signalr-reaction-gateway 8080:8080 -n drasi-system
+wait

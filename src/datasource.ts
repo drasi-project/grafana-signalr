@@ -24,7 +24,7 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
 
   constructor(instanceSettings: DataSourceInstanceSettings<DrasiDataSourceOptions>) {
     super(instanceSettings);
-    this.signalrUrl = instanceSettings.jsonData.signalrUrl || 'http://localhost:8002/hub';
+    this.signalrUrl = instanceSettings.url || 'http://localhost:8080/hub';
   }
 
   // Required method for Grafana to recognize this as a queryable data source
