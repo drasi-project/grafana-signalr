@@ -293,6 +293,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       const { FrameBuilderFactory } = require('./builders');
@@ -302,7 +304,7 @@ describe('DataSource', () => {
         next: () => {
           expect(FrameBuilderFactory.createBuilder).toHaveBeenCalledWith(
             'replace',
-            'test-query',
+            'd1-1-test-query',
             'A'
           );
           done();
@@ -321,6 +323,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       const { FrameBuilderFactory } = require('./builders');
@@ -330,7 +334,7 @@ describe('DataSource', () => {
         next: () => {
           expect(FrameBuilderFactory.createBuilder).toHaveBeenCalledWith(
             'append',
-            'test-query',
+            'd1-1-test-query',
             'A'
           );
           done();
@@ -359,6 +363,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       datasource.query(options).subscribe(() => {});
@@ -401,6 +407,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       datasource.query(options).subscribe(() => {});
@@ -419,6 +427,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       datasource.query(options).subscribe(() => {});
@@ -452,6 +462,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       const subscription = datasource.query(options).subscribe(() => {});
@@ -478,6 +490,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       datasource.query(options).subscribe(() => {});
@@ -514,6 +528,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       datasource.query(options1).subscribe(() => {
@@ -528,6 +544,8 @@ describe('DataSource', () => {
           interval: '1s',
           intervalMs: 1000,
           startTime: Date.now(),
+          dashboardUID: 'd1',
+          panelId: 1,
         };
 
         datasource.query(options2).subscribe(() => {
@@ -573,6 +591,8 @@ describe('DataSource', () => {
         interval: '1s',
         intervalMs: 1000,
         startTime: Date.now(),
+        dashboardUID: 'd1',
+        panelId: 1,
       };
 
       const observable = datasource.query(options);
