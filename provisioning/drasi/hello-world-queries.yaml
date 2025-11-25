@@ -59,9 +59,9 @@ spec:
         m.From AS MessageFrom,
         max(drasi.changeDateTime(m)) AS LastMessageTimestamp
       WHERE
-        LastMessageTimestamp <= datetime.realtime() - duration({ seconds: 20 })
+        LastMessageTimestamp <= datetime.realtime() - duration({ seconds: 10 })
       OR
-        drasi.trueLater(LastMessageTimestamp <= datetime.realtime() - duration({ seconds: 20 }), LastMessageTimestamp + duration({ seconds: 20 }))
+        drasi.trueLater(LastMessageTimestamp <= datetime.realtime() - duration({ seconds: 10 }), LastMessageTimestamp + duration({ seconds: 10 }))
       RETURN
         MessageFrom,
         LastMessageTimestamp

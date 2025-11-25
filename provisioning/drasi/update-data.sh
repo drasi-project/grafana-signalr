@@ -18,7 +18,7 @@ while true; do
       --dbname="$PGDATABASE" \
       --command="$SQL1"
 
-    sleep 25
+    sleep 15
 
     echo "Running UPDATE at $(date)..."
 
@@ -29,5 +29,5 @@ while true; do
       --dbname="$PGDATABASE" \
       --command="$SQL2"
 
-    sleep 25
+    sleep 15
 done

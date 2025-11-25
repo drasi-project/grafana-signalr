@@ -24,7 +24,8 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
 
   constructor(instanceSettings: DataSourceInstanceSettings<DrasiDataSourceOptions>) {
     super(instanceSettings);
-    this.signalrUrl = instanceSettings.url || 'http://localhost:8080/hub';
+    this.signalrUrl = instanceSettings.jsonData.signalrUrl || 'http://localhost:8080/hub';
+    console.log('DataSource initialized with SignalR URL:', this.signalrUrl);
   }
 
   // Required method for Grafana to recognize this as a queryable data source
@@ -215,7 +216,8 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
 
           for (const target of activeQueries) {
             try {
-              const refId = target.refId || target.queryId;
+              const refId = `${options.dashboardUID}-${options.panelId}-${target.queryId}`;
+              target.refId = refId;
 
               // Register this observer for the refId
               if (!this.observers.has(refId)) {
@@ -319,6 +321,7 @@ export class DataSource extends DataSourceApi<DrasiQuery, DrasiDataSourceOptions
   }
 
   async testDatasource(): Promise<{ status: string; message: string }> {
+    console.log('Testing with SignalR URL:', this.signalrUrl);
     try {
       // Validate URL is configured
       if (!this.signalrUrl || this.signalrUrl.trim() === '') {

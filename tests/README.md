@@ -57,7 +57,7 @@ npm run e2e:update
 
 The tests are configured in `playwright.config.ts` with the following defaults:
 
-- **Base URL**: `http://localhost:3002` (Grafana instance)
+- **Base URL**: `http://localhost:3000` (Grafana instance)
 - **Workers**: 1 (sequential execution)
 - **Retries**: 2 (in CI only)
 - **Timeout**: 30 seconds per test
@@ -130,5 +130,5 @@ npx playwright test --debug
 Or generate selectors:
 
 ```bash
-npx playwright codegen http://localhost:3002
+npx playwright codegen http://localhost:3000
 ```

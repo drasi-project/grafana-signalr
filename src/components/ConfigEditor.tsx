@@ -9,11 +9,15 @@ interface Props extends DataSourcePluginOptionsEditorProps<DrasiDataSourceOption
 
 export function ConfigEditor(props: Props) {
   const { onOptionsChange, options } = props;
+  const { jsonData } = options;
 
   const onSignalrUrlChange = (event: ChangeEvent<HTMLInputElement>) => {
     onOptionsChange({
       ...options,
-      url: event.target.value,
+      jsonData: {
+        ...jsonData,
+        signalrUrl: event.target.value,
+      },
     });
   };
 
@@ -26,7 +30,7 @@ export function ConfigEditor(props: Props) {
           labelWidth={12}
           inputWidth={30}
           onChange={onSignalrUrlChange}
-          value={options.url || ''}
+          value={options.jsonData.signalrUrl || ''}
           placeholder="http://localhost:8080/hub"
           tooltip="The URL of the SignalR hub endpoint"
         />

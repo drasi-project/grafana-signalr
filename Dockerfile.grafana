@@ -1,9 +1,9 @@
 FROM grafana/grafana:10.2.0
 
-# Copy plugin files
 COPY dist/ /var/lib/grafana/plugins/drasi-signalr-datasource/
+COPY provisioning/grafana/ /etc/grafana/provisioning/
+COPY provisioning/etc/dashboards/ /etc/dashboards/
 
-# Set environment variables
 ENV GF_SECURITY_ADMIN_USER=admin
 ENV GF_SECURITY_ADMIN_PASSWORD=admin
 ENV GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=drasi-signalr-datasource
@@ -11,5 +11,4 @@ ENV GF_PLUGINS_ENABLE_ALPHA=true
 ENV GF_DEFAULT_APP_MODE=development
 ENV GF_LOG_LEVEL=debug
 
-# Expose port
 EXPOSE 3000

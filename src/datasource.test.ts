@@ -64,8 +64,10 @@ describe('DataSource', () => {
       uid: 'test-uid',
       type: 'drasi-signalr-datasource',
       name: 'Test SignalR',
-      url: 'http://localhost:8002/hub',
-      meta: {} as any,      
+      meta: {} as any,
+      jsonData: {
+        signalrUrl: 'http://localhost:8002/hub',
+      },
     } as DataSourceInstanceSettings<DrasiDataSourceOptions>;
 
     datasource = new DataSource(instanceSettings);

@@ -46,7 +46,7 @@ npm run build
 npm run server
 ```
 
-Access Grafana at http://localhost:3002 (admin/admin)
+Access Grafana at http://localhost:3000 (admin/admin)
 
 ## 📖 Configuration
 

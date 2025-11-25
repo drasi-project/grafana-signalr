@@ -10,6 +10,7 @@ export interface DrasiQuery extends DataQuery {
 }
 
 export interface DrasiDataSourceOptions extends DataSourceJsonData {
+  signalrUrl: string;
 }
 
 export interface DrasiSecureJsonData {
