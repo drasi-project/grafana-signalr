@@ -304,8 +304,8 @@ describe('DataSource', () => {
         next: () => {
           expect(FrameBuilderFactory.createBuilder).toHaveBeenCalledWith(
             'replace',
-            'd1-1-test-query',
-            'A'
+            'test-query',
+            'd1-1-test-query'
           );
           done();
         },
@@ -334,8 +334,8 @@ describe('DataSource', () => {
         next: () => {
           expect(FrameBuilderFactory.createBuilder).toHaveBeenCalledWith(
             'append',
-            'd1-1-test-query',
-            'A'
+            'test-query',
+            'd1-1-test-query'
           );
           done();
         },
