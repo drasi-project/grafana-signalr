@@ -28,6 +28,6 @@ export default defineConfig({
     command: 'docker-compose up',
     url: BASE_URL,
     timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true,
   },
 });
