@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile.grafana
     ports:
-      - '3002:3000'
+      - '3000:3000'
     environment:
       - GF_FEATURE_TOGGLES_ENABLE=live
       - GF_SERVER_PROTOCOL=http
@@ -15,3 +15,17 @@ services:
       - GF_DEFAULT_APP_MODE=development
     extra_hosts:
       - "host.docker.internal:host-gateway"
+  drasi:
+    container_name: drasi-grafana-plugin-host
+    build:
+      context: ./provisioning/drasi
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - kube-config:/root/.kube
+      - data-volume:/data
+    ports:
+      - '8080:8080'
+volumes:
+  kube-config:
+  data-volume:
