@@ -8,7 +8,7 @@
     "test": "jest --watch --onlyChanged",
     "test:ci": "jest --passWithNoTests --maxWorkers 4",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint --cache --ignore-path ./.gitignore --ext .js,.jsx,.ts,.tsx .",
+    "lint": "eslint --cache --ignore-path ./.gitignore --ext .js,.jsx,.ts,.tsx --ignore-pattern '*.config.ts' --ignore-pattern '*.spec.ts' .",
     "lint:fix": "npm run lint -- --fix",
     "e2e": "npm exec playwright test",
     "e2e:update": "npm exec playwright test --update-snapshots",
